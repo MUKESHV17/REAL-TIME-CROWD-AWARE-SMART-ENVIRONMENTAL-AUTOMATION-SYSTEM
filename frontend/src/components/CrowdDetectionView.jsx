@@ -56,9 +56,9 @@ export default function CrowdDetectionView({
             {!isDetectionRunning ? (
               <button
                 onClick={onStartDetection}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-slate-950 bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 shadow-lg shadow-emerald-500/20 transition-all"
+                className="btn-start-detection flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-extrabold text-white transition-all"
               >
-                <Play className="w-4 h-4 fill-slate-950" />
+                <Play className="w-4 h-4 fill-white text-white" />
                 START DETECTION
               </button>
             ) : (
