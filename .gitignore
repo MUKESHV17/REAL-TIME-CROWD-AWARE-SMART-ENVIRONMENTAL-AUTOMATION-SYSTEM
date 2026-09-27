@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+backend/venv/
+venv/
+__pycache__/
+*.pyc
+*.zip
+
+# Generated results & logs
+backend/output_results/
+backend/dataset/
+*.csv
+
+# Model binary weights (exceed GitHub 100MB limit)
+*.pth
+*.pt
+
+# Environment & OS
+.DS_Store
+.env
+.env.local
+
+# Build outputs & caches
+frontend/dist/
+frontend/node_modules/
+.cache/
