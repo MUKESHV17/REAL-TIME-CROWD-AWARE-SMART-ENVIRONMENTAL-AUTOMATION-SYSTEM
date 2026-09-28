@@ -37,6 +37,8 @@ current_stats = {
 detection_running = False
 frame_buffer = None
 cap = None
+start_stop_lock = threading.Lock()
+inference_lock = threading.Lock()
 
 # In-memory storage for devices (you can replace with database)
 devices = {
@@ -291,7 +293,10 @@ def process_frame():
     
     try:
         # YOLO detection for people
-        results = yolo_model(frame, verbose=False, conf=MIN_CONFIDENCE)
+        with inference_lock:
+            results = yolo_model(frame, verbose=False, conf=MIN_CONFIDENCE)
+            if device.type == 'mps':
+                torch.mps.synchronize()
         people_boxes = []
         
         for r in results:
@@ -518,78 +523,80 @@ def start_detection():
     """Start detection process"""
     global detection_running, cap
     
-    try:
-        if not detection_running:
-            # Initialize camera
-            cap = cv2.VideoCapture(CAMERA_ID)
-            if not cap.isOpened():
-                return jsonify({'error': 'Cannot access camera'}), 500
-            
-            # Set camera properties
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-            cap.set(cv2.CAP_PROP_FPS, 30)
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            
-            detection_running = True
-            
-            # Start detection thread
-            detection_thread = threading.Thread(target=detection_loop, daemon=True)
-            detection_thread.start()
-            
-            logger.info("Detection started successfully")
-            return jsonify({'status': 'Detection started'})
-        else:
-            return jsonify({'status': 'Detection already running'})
-            
-    except Exception as e:
-        logger.error(f"Error starting detection: {e}")
-        return jsonify({'error': str(e)}), 500
+    with start_stop_lock:
+        try:
+            if not detection_running:
+                # Initialize camera
+                cap = cv2.VideoCapture(CAMERA_ID)
+                if not cap.isOpened():
+                    return jsonify({'error': 'Cannot access camera'}), 500
+                
+                # Set camera properties
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                cap.set(cv2.CAP_PROP_FPS, 30)
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                
+                detection_running = True
+                
+                # Start detection thread
+                detection_thread = threading.Thread(target=detection_loop, daemon=True)
+                detection_thread.start()
+                
+                logger.info("Detection started successfully")
+                return jsonify({'status': 'Detection started'})
+            else:
+                return jsonify({'status': 'Detection already running'})
+                
+        except Exception as e:
+            logger.error(f"Error starting detection: {e}")
+            return jsonify({'error': str(e)}), 500
 
 @app.route('/api/stop_detection', methods=['POST'])
 def stop_detection():
     """Stop detection process"""
     global detection_running, cap, frame_buffer
     
-    try:
-        if detection_running:
-            detection_running = False
-            
-            # Release camera
-            if cap is not None:
-                cap.release()
-                cap = None
-            
-            # Clear frame buffer
-            frame_buffer = None
-            
-            # Reset stats
-            current_stats.update({
-                'people_count': 0,
-                'density': 0.0,
-                'device_status': 'off',
-                'crowd_level': 'unknown',
-                'crowd_confidence': 0.0,
-                'tracked_ids': [],
-                'tracking_info': [],
-                'processing_time': 0,
-                'fps': 0
-            })
-            
-            # Turn off devices
-            try:
-                turn_off_device()
-            except:
-                pass
-            
-            logger.info("Detection stopped successfully")
-            return jsonify({'status': 'Detection stopped'})
-        else:
-            return jsonify({'status': 'Detection not running'})
-            
-    except Exception as e:
-        logger.error(f"Error stopping detection: {e}")
-        return jsonify({'error': str(e)}), 500
+    with start_stop_lock:
+        try:
+            if detection_running:
+                detection_running = False
+                
+                # Release camera
+                if cap is not None:
+                    cap.release()
+                    cap = None
+                
+                # Clear frame buffer
+                frame_buffer = None
+                
+                # Reset stats
+                current_stats.update({
+                    'people_count': 0,
+                    'density': 0.0,
+                    'device_status': 'off',
+                    'crowd_level': 'unknown',
+                    'crowd_confidence': 0.0,
+                    'tracked_ids': [],
+                    'tracking_info': [],
+                    'processing_time': 0,
+                    'fps': 0
+                })
+                
+                # Turn off devices
+                try:
+                    turn_off_device()
+                except:
+                    pass
+                
+                logger.info("Detection stopped successfully")
+                return jsonify({'status': 'Detection stopped'})
+            else:
+                return jsonify({'status': 'Detection not running'})
+                
+        except Exception as e:
+            logger.error(f"Error stopping detection: {e}")
+            return jsonify({'error': str(e)}), 500
 
 @app.route('/video_feed')
 def video_feed():
